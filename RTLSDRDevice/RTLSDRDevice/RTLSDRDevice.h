@@ -27,8 +27,14 @@
 #define RTLSDRDEVICE_API __declspec(dllimport) 
 #endif	
 
-	RTLSDRDEVICE_API void Initialize(unsigned int startFrequency, unsigned int endFrequency, unsigned int stepSize);    
+	RTLSDRDEVICE_API int GetConnectedDevicesCount();
+	RTLSDRDEVICE_API int Initialize(unsigned int startFrequency, unsigned int endFrequency, unsigned int stepSize, unsigned int maxSamplingRate);
 	RTLSDRDEVICE_API unsigned int GetBufferSize();    	
-	RTLSDRDEVICE_API void GetBins(float* binsArray, int deviceIndex);
+	RTLSDRDEVICE_API double GetTotalADCValue(int deviceIndex);
+	////RTLSDRDEVICE_API void GetBins(float* binsArray, int deviceIndex);
+	RTLSDRDEVICE_API void GetBins(float* binsArray, int deviceIndex, double rangeSamplingPercentage, bool usetotalADCMagnitude = false, unsigned int scanCount = 1);
+	RTLSDRDEVICE_API void GetBinsForDevices(float* binsArray, float* binsArray2, int deviceIndex1, int deviceIndex2);
+	RTLSDRDEVICE_API double ScanAndGetTotalADCMagnitudeForFrequency(unsigned int frequency);
 	RTLSDRDEVICE_API int GetTotalMagnitude();
+	RTLSDRDEVICE_API double GetAvgMagnitude();
 	RTLSDRDEVICE_API int SetUseDB(int value);

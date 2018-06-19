@@ -19,25 +19,38 @@ namespace RTLSpectrumAnalyzerGUI
 
     public class NativeMethods
     {
-        private const string LibRtlSdr = "RTLSDRDevice.dll";        
+        private const string LibRtlSdr = "RTLSDRDevice.dll";
+
+        [DllImport(LibRtlSdr, EntryPoint = "GetConnectedDevicesCount", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int GetConnectedDevicesCount();        
 
         [DllImport(LibRtlSdr, EntryPoint = "Initialize", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int Initialize(uint startFrequency, uint endFrequency, uint stepSize);
+        public static extern int Initialize(uint startFrequency, uint endFrequency, uint stepSize, uint maxSamplingRate);
 
         [DllImport(LibRtlSdr, EntryPoint = "GetBufferSize", CallingConvention = CallingConvention.Cdecl)]
-        public static extern uint GetBufferSize();        
-       
+        public static extern uint GetBufferSize();
+        
+        [DllImport(LibRtlSdr, EntryPoint = "GetTotalADCValue", CallingConvention = CallingConvention.Cdecl)]
+        public static extern double GetTotalADCValue(int deviceIndex);
+
         [DllImport(LibRtlSdr, EntryPoint = "GetBins", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void GetBins(float[] binArray, int deviceIndex);
+        ////public static extern void GetBins(float[] binArray, int deviceIndex);
+        public static extern void GetBins(float[] buffer, int deviceIndex, double rangeSamplingPercentage, bool usetotalADCMagnitude = false, uint scanCount = 1);
+
+        [DllImport(LibRtlSdr, EntryPoint = "GetBinsForDevices", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void GetBinsForDevices(float[] binArray1, float[] binArray2, int deviceIndex1, int deviceIndex2);
+
+        [DllImport(LibRtlSdr, EntryPoint = "ScanAndGetTotalADCMagnitudeForFrequency", CallingConvention = CallingConvention.Cdecl)]
+        public static extern double ScanAndGetTotalADCMagnitudeForFrequency(uint frequency);        
 
         [DllImport(LibRtlSdr, EntryPoint = "GetTotalMagnitude", CallingConvention = CallingConvention.Cdecl)]
         public static extern int GetTotalMagnitude();
 
+        [DllImport(LibRtlSdr, EntryPoint = "GetAvgMagnitude", CallingConvention = CallingConvention.Cdecl)]
+        public static extern double GetAvgMagnitude();
+
         [DllImport(LibRtlSdr, EntryPoint = "SetUseDB", CallingConvention = CallingConvention.Cdecl)]
         public static extern int SetUseDB(int value);
-
-        [DllImport(LibRtlSdr, EntryPoint = "get_device_count", CallingConvention = CallingConvention.Cdecl)]
-        public static extern uint get_device_count();
 
         [DllImport(LibRtlSdr, EntryPoint = "get_device_name", CallingConvention = CallingConvention.Cdecl)]
         private static extern IntPtr get_device_name_native(uint index);

@@ -46,12 +46,13 @@ struct tuning_state
 	//pthread_mutex_t buf_mutex;
 
 	int totalMagnitude;
-	float avgMagnitude;
+	double avgMagnitude;
 };
 
 /* 3000 is enough for 3GHz b/w worst case */
 #define MAX_TUNES	3000
-struct tuning_state tunes[MAX_TUNES];
+struct tuning_state tunesDevice1[MAX_TUNES];
+struct tuning_state tunesDevice2[MAX_TUNES];
 int tune_count = 0;
 int boxcar = 1;
 int ppm_error = 0;
@@ -188,7 +189,37 @@ void sine_table(int size)
 	}
 }
 
-void frequency_range(unsigned int startFrequency, unsigned int endFrequency, unsigned int stepSize)
+void buildTunesArray(struct tuning_state *tunes, int lower, int bw_seen, int bw_used, int bin_e, int buf_len, double crop, int downsample, int downsample_passes)
+{
+	struct tuning_state *ts;
+
+	for (int i = 0; i<tune_count; i++) {
+		ts = &tunes[i];
+		ts->freq = lower + i*bw_seen + bw_seen / 2;
+		ts->rate = bw_used;
+		ts->bin_e = bin_e;
+		ts->samples = 0;
+		ts->crop = crop;
+		ts->downsample = downsample;
+		ts->downsample_passes = downsample_passes;
+		ts->avg = (long*)malloc((1 << bin_e) * sizeof(long));
+		if (!ts->avg) {
+			fprintf(stderr, "Error: malloc.\n");
+			exit(1);
+		}
+		for (int j = 0; j<(1 << bin_e); j++) {
+			ts->avg[j] = 0L;
+		}
+		ts->buf8 = (uint8_t*)malloc(buf_len * sizeof(uint8_t));
+		if (!ts->buf8) {
+			fprintf(stderr, "Error: malloc.\n");
+			exit(1);
+		}
+		ts->buf_len = buf_len;
+	}
+}
+
+void frequency_range(unsigned int startFrequency, unsigned int endFrequency, unsigned int stepSize, struct tuning_state *tunes, unsigned int maxSamplingRate = 0)
 /* flesh out the tunes[] for scanning */
 // do we want the fewest ranges (easy) or the fewest bins (harder)?
 {	
@@ -202,15 +233,18 @@ void frequency_range(unsigned int startFrequency, unsigned int endFrequency, uns
 	lower = startFrequency;
 	upper = endFrequency;
 	max_size = stepSize;	
+
+	if (!maxSamplingRate)
+		maxSamplingRate = MAXIMUM_RATE;
 	
 	downsample = 1;
 	downsample_passes = 0;
-	/* evenly sized ranges, as close to MAXIMUM_RATE as possible */
+	/* evenly sized ranges, as close to maxSamplingRate as possible */
 	// todo, replace loop with algebra
 	for (i=1; i<1500; i++) {
 		bw_seen = (upper - lower) / i;
 		bw_used = (int)((double)(bw_seen) / (1.0 - crop));
-		if (bw_used > MAXIMUM_RATE) {
+		if (bw_used > maxSamplingRate) {
 			continue;}
 		tune_count = i;
 		break;
@@ -218,7 +252,7 @@ void frequency_range(unsigned int startFrequency, unsigned int endFrequency, uns
 	/* unless small bandwidth */
 	if (bw_used < MINIMUM_RATE) {
 		tune_count = 1;
-		downsample = MAXIMUM_RATE / bw_used;
+		downsample = maxSamplingRate / bw_used;
 		bw_used = bw_used * downsample;
 	}
 	if (!boxcar && downsample > 1) {
@@ -250,8 +284,10 @@ void frequency_range(unsigned int startFrequency, unsigned int endFrequency, uns
 	if (buf_len < DEFAULT_BUF_LENGTH) {
 		buf_len = DEFAULT_BUF_LENGTH;
 	}
+	buildTunesArray(tunes, lower, bw_seen, bw_used, bin_e, buf_len, crop, downsample, downsample_passes);
+	////buildTunesArray(tunesDevice2, lower, bw_seen, bw_used, bin_e, buf_len, crop, downsample, downsample_passes);
 	/* build the array */
-	for (i=0; i<tune_count; i++) {
+	/*////for (i=0; i<tune_count; i++) {
 		ts = &tunes[i];
 		ts->freq = lower + i*bw_seen + bw_seen/2;
 		ts->rate = bw_used;
@@ -274,7 +310,7 @@ void frequency_range(unsigned int startFrequency, unsigned int endFrequency, uns
 			exit(1);
 		}
 		ts->buf_len = buf_len;
-	}
+	}*/
 	/* report */
 	fprintf(stderr, "Number of frequency hops: %i\n", tune_count);
 	fprintf(stderr, "Dongle bandwidth: %iHz\n", bw_used);
@@ -288,7 +324,7 @@ void frequency_range(unsigned int startFrequency, unsigned int endFrequency, uns
 }
 
 
-rtlsdr_dev_t* InitializeDevice(int dev_index, unsigned int startFrequency, unsigned int endFrequency, unsigned int stepSize, rtlsdr_dev_t *device)
+rtlsdr_dev_t* InitializeDevice(int dev_index, unsigned int startFrequency, unsigned int endFrequency, unsigned int stepSize, rtlsdr_dev_t *device, unsigned int maxSamplingRate)
 {
 	double(*window_fn)(int, int) = rectangle;
 
@@ -317,7 +353,17 @@ rtlsdr_dev_t* InitializeDevice(int dev_index, unsigned int startFrequency, unsig
 
 	verbose_reset_buffer(device);
 
-	frequency_range(startFrequency, endFrequency, stepSize);
+	struct tuning_state *tunes;
+
+	if (dev_index == 0)
+		tunes = tunesDevice1;
+	else
+		tunes = tunesDevice2;
+
+
+	frequency_range(startFrequency, endFrequency, stepSize, tunes, maxSamplingRate);
+
+
 
 	rtlsdr_set_sample_rate(device, (uint32_t)tunes[0].rate);
 
@@ -340,25 +386,70 @@ rtlsdr_dev_t* InitializeDevice(int dev_index, unsigned int startFrequency, unsig
 	return device;
 }
 
-int Initialize(unsigned int startFrequency, unsigned int endFrequency, unsigned int stepSize)
+int GetConnectedDevicesCount()
+{
+	/*int dev_index;
+
+	int devCount = 0;
+
+	dev_index = verbose_device_search("0");
+
+	if (dev_index > -1)
+		devCount++;
+
+	dev_index = verbose_device_search("1");
+
+	if (dev_index > -1)
+		devCount++;
+
+	return devCount;
+	*/
+
+	verbose_device_search("0");
+	return rtlsdr_get_device_count();
+}
+
+int Initialize(unsigned int startFrequency, unsigned int endFrequency, unsigned int stepSize, unsigned int maxSamplingRate)
 {	
 	int dev_index;
+
+	int devCount = 0;
 
 	////if (dev == NULL)
 	{
 		dev_index = verbose_device_search("0");
 
-		dev = InitializeDevice(dev_index, startFrequency, endFrequency, stepSize, dev);		
+		if (dev_index>-1)
+			dev = InitializeDevice(dev_index, startFrequency, endFrequency, stepSize, dev, maxSamplingRate);
 	}
 
-	/*////if (dev2 == NULL)
+	////if (dev2 == NULL)
 	{
 		dev_index = verbose_device_search("1");
 
-		InitializeDevice(dev_index, startFrequency, endFrequency, stepSize);
-	}*/
+		if (dev_index>-1)
+			dev2 = InitializeDevice(dev_index, startFrequency, endFrequency, stepSize, dev2, maxSamplingRate);
 
-	return 1;
+		if (dev2 == NULL)
+		{
+			dev_index = verbose_device_search("2");
+
+			if (dev_index > -1)
+				dev2 = InitializeDevice(dev_index, startFrequency, endFrequency, stepSize, dev2, maxSamplingRate);
+		}
+	}
+
+	if (dev)
+	{
+		devCount++;
+	}
+
+	if (dev2)
+	{
+		devCount++;
+	}
+
+	return devCount;
 }
 
 
@@ -506,7 +597,28 @@ long real_conj(int16_t real, int16_t imag)
 	return ((long)real*(long)real + (long)imag*(long)imag);
 }
 
-int GetAverageMagnitude(tuning_state *ts)
+double GetTotalADCMagnitude(tuning_state *ts)
+{
+	int iValue, qValue;
+	int totalMagnitude = 0;
+
+	int samples = ts->buf_len / 2;
+
+	for (int i = 0; i < ts->buf_len; i += 2)
+	{
+		iValue = ts->buf8[i] - 127;
+		qValue = ts->buf8[i + 1] - 127;
+
+		totalMagnitude += iValue*iValue + qValue*qValue;
+	}
+
+	ts->totalMagnitude = totalMagnitude;
+	ts->avgMagnitude = (double)totalMagnitude / samples;
+
+	return ts->totalMagnitude;
+}
+
+double GetAverageMagnitude(tuning_state *ts)
 {	
 	int iValue, qValue;
 	int totalMagnitude = 0;
@@ -522,12 +634,13 @@ int GetAverageMagnitude(tuning_state *ts)
 	}
 
 	ts->totalMagnitude = totalMagnitude;
-	ts->avgMagnitude = totalMagnitude / samples;
+	ts->avgMagnitude = (double) totalMagnitude / samples;
 
 	return ts->avgMagnitude;
 }
 
-void scanner(int deviceIndex)
+
+double GetTotalADCValue(int deviceIndex)
 {
 	rtlsdr_dev_t *device;
 
@@ -536,30 +649,179 @@ void scanner(int deviceIndex)
 	else
 		device = dev2;
 
+	double totalADCValue = 0;
+
 	int i, j, j2, f, n_read, offset, bin_e, bin_len, buf_len, ds, ds_p;
 	int32_t w;
 	struct tuning_state *ts;
-	bin_e = tunes[0].bin_e;
+
+	bin_e = tunesDevice1[0].bin_e;
 	bin_len = 1 << bin_e;
-	buf_len = tunes[0].buf_len;
-	for (i=0; i<tune_count; i++)
-	{		
-		ts = &tunes[i];
+	buf_len = tunesDevice1[0].buf_len;
+
+	for (i = 0; i<tune_count; i++)
+	{
+		ts = &tunesDevice1[i];
 		f = (int)rtlsdr_get_center_freq(device);
-		if (f != ts->freq) {
-			retune(device, ts->freq);}
+		
+		if (f != ts->freq)
+		{
+			retune(device, ts->freq);
+		}
+
+		rtlsdr_read_sync(device, ts->buf8, buf_len, &n_read);		
+
+		if (n_read != buf_len)
+		{
+			fprintf(stderr, "Error: dropped samples.\n");
+		}
+
+		totalADCValue += GetTotalADCMagnitude(ts);
+	}
+
+	return totalADCValue;
+}
+
+void prepForFFT(struct tuning_state *ts)
+{
+	int i, j, j2, f, n_read, offset, bin_e, bin_len, buf_len, ds, ds_p;
+	int32_t w;
+
+
+	bin_e = ts[0].bin_e;
+	bin_len = 1 << bin_e;
+	buf_len = ts[0].buf_len;
+
+	/* prep for fft */
+	for (j = 0; j<buf_len; j++) {
+		fft_buf[j] = (int16_t)ts->buf8[j] - 127;
+	}
+	ds = ts->downsample;
+	ds_p = ts->downsample_passes;
+	if (boxcar && ds > 1) {
+		j = 2, j2 = 0;
+		while (j < buf_len) {
+			fft_buf[j2] += fft_buf[j];
+			fft_buf[j2 + 1] += fft_buf[j + 1];
+			fft_buf[j] = 0;
+			fft_buf[j + 1] = 0;
+			j += 2;
+			if (j % (ds * 2) == 0) {
+				j2 += 2;
+			}
+		}
+	}
+	else if (ds_p) {  /* recursive */
+		for (j = 0; j < ds_p; j++) {
+			downsample_iq(fft_buf, buf_len >> j);
+		}
+		/* droop compensation */
+		if (comp_fir_size == 9 && ds_p <= CIC_TABLE_MAX) {
+			generic_fir(fft_buf, buf_len >> j, cic_9_tables[ds_p]);
+			generic_fir(fft_buf + 1, (buf_len >> j) - 1, cic_9_tables[ds_p]);
+		}
+	}
+	remove_dc(fft_buf, buf_len / ds);
+	remove_dc(fft_buf + 1, (buf_len / ds) - 1);
+	/* window function and fft */
+	for (offset = 0; offset<(buf_len / ds); offset += (2 * bin_len)) {
+		// todo, let rect skip this
+		for (j = 0; j<bin_len; j++) {
+			w = (int32_t)fft_buf[offset + j * 2];
+			w *= (int32_t)(window_coefs[j]);
+			//w /= (int32_t)(ds);
+			fft_buf[offset + j * 2] = (int16_t)w;
+			w = (int32_t)fft_buf[offset + j * 2 + 1];
+			w *= (int32_t)(window_coefs[j]);
+			//w /= (int32_t)(ds);
+			fft_buf[offset + j * 2 + 1] = (int16_t)w;
+		}
+		fix_fft(fft_buf + offset, bin_e);
+		if (!peak_hold) {
+			for (j = 0; j<bin_len; j++) {
+				ts->avg[j] += real_conj(fft_buf[offset + j * 2], fft_buf[offset + j * 2 + 1]);
+			}
+		}
+		else {
+			for (j = 0; j<bin_len; j++) {
+				ts->avg[j] = max(real_conj(fft_buf[offset + j * 2], fft_buf[offset + j * 2 + 1]), ts->avg[j]);
+			}
+		}
+		ts->samples += ds;
+	}
+}
+
+void ScanTune(struct tuning_state *ts, rtlsdr_dev_t *device, bool usetotalADCMagnitude = false, unsigned int scanCount = 1)
+{
+	int j, j2, f, offset, n_read, bin_e, bin_len, buf_len, ds, ds_p;
+	int32_t w;	
+	bin_e = tunesDevice1[0].bin_e;
+	bin_len = 1 << bin_e;
+	buf_len = tunesDevice1[0].buf_len;
+
+	f = (int)rtlsdr_get_center_freq(device);
+	if (f != ts->freq) {
+		retune(device, ts->freq);
+	}
+
+	double avgTotalADCMagnitude = 0;
+
+	for (int j = 0; j < scanCount; j++)
+	{
 		rtlsdr_read_sync(device, ts->buf8, buf_len, &n_read);
 
-		GetAverageMagnitude(ts);
+		////////GetAverageMagnitude(ts);
+		if (usetotalADCMagnitude)
+		{
+			GetTotalADCMagnitude(ts);
 
-		if (n_read != buf_len) {
-			fprintf(stderr, "Error: dropped samples.\n");}
-		/* rms */
-		if (bin_len == 1) {
-			rms_power(ts);
-			continue;
+			avgTotalADCMagnitude += ts->totalMagnitude;
 		}
+	}
+
+	if (usetotalADCMagnitude)
+		avgTotalADCMagnitude /= scanCount;
+
+	ts->totalMagnitude = avgTotalADCMagnitude;
+
+	if (n_read != buf_len) {
+		fprintf(stderr, "Error: dropped samples.\n");
+	}
+	/* rms */
+	if (bin_len == 1) {
+		rms_power(ts);
+		return;
+	}
+
+	if (!usetotalADCMagnitude)
+		prepForFFT(ts);
+}
+
+void scanner(int deviceIndex, double rangeSamples, bool usetotalADCMagnitude = false, unsigned int scanCount = 1)
+{
+	rtlsdr_dev_t *device;
+
+	if (deviceIndex == 0)
+		device = dev;
+	else
+		device = dev2;	
+
+	int sampleGap = round(tune_count / rangeSamples);
+
+	for (int i = 0; i < tune_count; i++)
+	{		
+		if (i%sampleGap == 0)
+		{
+			ScanTune(&tunesDevice1[i], device, usetotalADCMagnitude, scanCount);
+		}
+		else
+		{
+			tunesDevice1[i] = tunesDevice1[i-1];
+		}
+
+		
 		/* prep for fft */
+		/*////
 		for (j=0; j<buf_len; j++) {
 			fft_buf[j] = (int16_t)ts->buf8[j] - 127;
 		}
@@ -577,11 +839,11 @@ void scanner(int deviceIndex)
 					j2 += 2;}
 			}
 		} else if (ds_p) {  /* recursive */
-			for (j=0; j < ds_p; j++) {
+/*			for (j=0; j < ds_p; j++) {
 				downsample_iq(fft_buf, buf_len >> j);
 			}
 			/* droop compensation */
-			if (comp_fir_size == 9 && ds_p <= CIC_TABLE_MAX) {
+/*			if (comp_fir_size == 9 && ds_p <= CIC_TABLE_MAX) {
 				generic_fir(fft_buf, buf_len >> j, cic_9_tables[ds_p]);
 				generic_fir(fft_buf+1, (buf_len >> j)-1, cic_9_tables[ds_p]);
 			}
@@ -589,7 +851,7 @@ void scanner(int deviceIndex)
 		remove_dc(fft_buf, buf_len / ds);
 		remove_dc(fft_buf+1, (buf_len / ds) - 1);
 		/* window function and fft */
-		for (offset=0; offset<(buf_len/ds); offset+=(2*bin_len)) {
+/*		for (offset=0; offset<(buf_len/ds); offset+=(2*bin_len)) {
 			// todo, let rect skip this
 			for (j=0; j<bin_len; j++) {
 				w =  (int32_t)fft_buf[offset+j*2];
@@ -612,9 +874,68 @@ void scanner(int deviceIndex)
 				}
 			}
 			ts->samples += ds;
-		}
+		}*/
 	}
 }
+
+
+void devicesScanner()
+{	
+	int i, j, j2, f, n_read, offset, bin_e, bin_len, buf_len, ds, ds_p;
+	int32_t w;
+	struct tuning_state *ts1, *ts2;
+	bin_e = tunesDevice1[0].bin_e;
+	bin_len = 1 << bin_e;
+	buf_len = tunesDevice1[0].buf_len;
+	for (i = 0; i<tune_count; i++)
+	{
+		ts1 = &tunesDevice1[i];
+		f = (int)rtlsdr_get_center_freq(dev);
+		if (f != ts1->freq) {
+			retune(dev, ts1->freq);
+		}
+		rtlsdr_read_sync(dev, ts1->buf8, buf_len, &n_read);
+
+		ts2 = &tunesDevice2[i];
+		f = (int)rtlsdr_get_center_freq(dev2);
+		if (f != ts2->freq) {
+			retune(dev2, ts2->freq);
+		}
+		rtlsdr_read_sync(dev2, ts2->buf8, buf_len, &n_read);
+
+
+		GetAverageMagnitude(ts1);
+
+		GetAverageMagnitude(ts2);
+
+		if (n_read != buf_len) {
+			fprintf(stderr, "Error: dropped samples.\n");
+		}
+		/* rms */
+		if (bin_len == 1) {
+			rms_power(ts1);
+			rms_power(ts2);
+			continue;
+		}		
+
+		prepForFFT(ts1);
+		prepForFFT(ts2);
+	}
+}
+
+double ScanAndGetTotalADCMagnitudeForFrequency(unsigned int frequency)
+{
+	tuning_state *ts = new tuning_state();
+
+	memcpy(ts, &tunesDevice1[0], sizeof(tuning_state));
+
+	ts->freq = frequency;
+
+	ScanTune(ts, dev, true, 1);
+
+	return ts->totalMagnitude;
+}
+
 
 void csv_dbm(struct tuning_state *ts, float* buffer, long offset)
 {
@@ -676,21 +997,74 @@ unsigned int GetBufferSize()
 	long length=0;
 
 	for (int i=0; i<tune_count; i++)			
-		length += 1 << tunes[i].bin_e;
+		length += 1 << tunesDevice1[i].bin_e;
 
 	return length;
 }
 
-void GetBins(float *buffer, int deviceIndex)
+
+/*////void GetBins(float *buffer, int deviceIndex)
 {
 		scanner(deviceIndex);		
 
 		long length = 0;
-				
 		for (int i=0; i<tune_count; i++) {			
-			csv_dbm(&tunes[i], buffer, i*length);
-			length = 1 << tunes[i].bin_e;
+			csv_dbm(&tunesDevice1[i], buffer, i*length);
+			length = 1 << tunesDevice1[i].bin_e;
 		}				
+}
+*/
+
+void GetBins(float *buffer, int deviceIndex, double rangeSamplingPercentage, bool usetotalADCMagnitude = false, unsigned int scanCount = 1)
+{
+	scanCount = 1;
+
+	double rangeSamples = rangeSamplingPercentage / 100 * tune_count;
+
+	if (rangeSamples < 3)
+		rangeSamples = tune_count;
+
+	scanner(deviceIndex, rangeSamples, usetotalADCMagnitude, scanCount);
+
+	long length = 0;
+	long totalBufferLength = 0;
+	if (!usetotalADCMagnitude)
+	{
+		for (int i = 0; i < tune_count; i++) {
+			csv_dbm(&tunesDevice1[i], buffer, i*length);
+			length = 1 << tunesDevice1[i].bin_e;
+		}
+	}
+	else
+	{
+		for (int i = 0; i < tune_count; i++)
+		{		
+			length = 1 << tunesDevice1[i].bin_e;
+
+			for (int j = 0; j < length; j++)
+				buffer[totalBufferLength++] = tunesDevice1[i].totalMagnitude;
+		}
+	}
+}
+
+
+void GetBinsForDevices(float *buffer1, float *buffer2, int deviceIndex1, int deviceIndex2)
+{
+	devicesScanner();
+
+	long length = 0;
+
+	for (int i = 0; i<tune_count; i++) {
+		csv_dbm(&tunesDevice1[i], buffer1, i*length);
+		length = 1 << tunesDevice1[i].bin_e;
+	}
+
+	length = 0;
+
+	for (int i = 0; i<tune_count; i++) {
+		csv_dbm(&tunesDevice2[i], buffer2, i*length);
+		length = 1 << tunesDevice2[i].bin_e;
+	}
 }
 
 
@@ -700,20 +1074,20 @@ int GetTotalMagnitude()
 
 	for (int i = 0; i<tune_count; i++)
 	{
-		totalMagnitude += tunes[i].totalMagnitude;		
+		totalMagnitude += tunesDevice1[i].totalMagnitude;		
 	}
 
 	return totalMagnitude;
 }
 
 
-int GetAvgMagnitude()
+double GetAvgMagnitude()
 {
-	int avgMagnitude = 0;
+	double avgMagnitude = 0;
 
 	for (int i = 0; i<tune_count; i++)
 	{
-		avgMagnitude += tunes[i].totalMagnitude;
+		avgMagnitude += tunesDevice1[i].avgMagnitude;
 	}
 
 	return avgMagnitude/tune_count;

@@ -1,7 +1,7 @@
-﻿using System; 
-using System.Drawing; 
-using System.Drawing.Imaging; 
-using System.Runtime.InteropServices; 
+﻿using System;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using System.Xml.Schema;
 using System.Collections.Generic;
 
@@ -10,7 +10,7 @@ using System.Windows.Forms;
 
 namespace RTLSpectrumAnalyzerGUI
 {
-    public enum WaterFallMode { Off, Strength, Difference}
+    public enum WaterFallMode { Off, Strength, Difference }
     public enum WaterFallRangeMode { Fixed, Auto }
 
     public class Waterfall
@@ -37,52 +37,52 @@ namespace RTLSpectrumAnalyzerGUI
 
         public Waterfall(PictureBox source)
         {
-            this.source = source;            
+            this.source = source;
 
-            int r=255, g=0, b=0;
+            int r = 255, g = 0, b = 0;
 
-            int stage = 0;            
+            int stage = 0;
 
             colors = new List<Color>();
-            
+
             while (stage != 4)
             {
                 colors.Add(Color.FromArgb(r, g, b));
 
-                switch(stage)
+                switch (stage)
                 {
-                    case(0):
+                    case (0):
                         g++;
 
-                        if (g==255)
+                        if (g == 255)
                             stage++;
-                    break;
+                        break;
 
 
-                    case(1):
+                    case (1):
                         r--;
 
-                        if (r==0)
+                        if (r == 0)
                             stage++;
-                    break;
+                        break;
 
 
-                    case(2):
+                    case (2):
                         b++;
 
-                        if (b==255)
+                        if (b == 255)
                             stage++;
-                    break;
+                        break;
 
-                    case(3):
+                    case (3):
                         g--;
 
-                        if (g==0)
+                        if (g == 0)
                             stage++;
-                    break;
+                        break;
                 }
-                
-            }                        
+
+            }
         }
 
         /// <summary>
@@ -111,8 +111,8 @@ namespace RTLSpectrumAnalyzerGUI
                 if (Depth != 8 && Depth != 24 && Depth != 32)
                 {
                     throw new ArgumentException("Only 8, 24 and 32 bpp images are supported.");
-                }                
-                
+                }
+
                 // Lock bitmap and return bitmap data
                 bitmapData = bitmap.LockBits(rect, ImageLockMode.ReadWrite, bitmap.PixelFormat);
 
@@ -249,7 +249,7 @@ namespace RTLSpectrumAnalyzerGUI
                 double inc = (double)graphBinCount / Width;
 
                 double minStrength, maxStrength;
-                double normalizedColorRange;                
+                double normalizedColorRange;
 
                 //double frequencyScanMinStrength = 99999999;
                 //double frequencyScanMaxStrength = -99999999;
@@ -275,9 +275,9 @@ namespace RTLSpectrumAnalyzerGUI
                         maxStrength = -99999999;
                         count = 0;
                         for (int j = (int)index; j < (int)(index + inc); j++)
-                        {                            
+                        {
                             if (array[j] > maxStrength)
-                                maxStrength = array[j];                            
+                                maxStrength = array[j];
 
                             count++;
                         }
@@ -305,7 +305,7 @@ namespace RTLSpectrumAnalyzerGUI
                             SetPixel(x, y, colors[(int)((1 - normalizedColorRange) * (colors.Count - 1))]);
 
                         }
-                        catch(Exception ex)
+                        catch (Exception ex)
                         {
 
                         }
@@ -352,7 +352,7 @@ namespace RTLSpectrumAnalyzerGUI
                         maxDelta = -99999999;
                         count = 0;
                         for (int j = (int)index; j < (int)(index + inc); j++)
-                        {                            
+                        {
                             delta = CalculateStrengthDifference(array1, array2, j);
 
                             if (delta > maxDelta)
@@ -361,8 +361,8 @@ namespace RTLSpectrumAnalyzerGUI
                             count++;
                         }
 
-                        if (count == 0)                            
-                            maxDelta = CalculateStrengthDifference(array1, array2, (long)index);                         
+                        if (count == 0)
+                            maxDelta = CalculateStrengthDifference(array1, array2, (long)index);
 
                         //if (maxDelta > frequencyScanMaxDelta)
                         //frequencyScanMaxDelta = maxDelta;                        
@@ -406,14 +406,14 @@ namespace RTLSpectrumAnalyzerGUI
 
         static public double GetSurroundNoiseFloorStrength(float[] array1, long frequencyIndex, long width)
         {
-            if (frequencyIndex < width/2)
+            if (frequencyIndex < width / 2)
             {
                 width = width / 2 + (width / 2 - frequencyIndex);
 
                 frequencyIndex = width / 2;
             }
 
-            if (frequencyIndex + width/2 >= array1.Length)
+            if (frequencyIndex + width / 2 >= array1.Length)
             {
                 width = ((array1.Length - frequencyIndex) * 2);
 
@@ -424,12 +424,23 @@ namespace RTLSpectrumAnalyzerGUI
 
             double totalStrength = 0;
 
-            for (long i = frequencyIndex - width/2; i < frequencyIndex + width / 2; i++)
+            for (long i = frequencyIndex - width / 2; i < frequencyIndex + width / 2; i++)
             {
                 totalStrength += array1[i];
-            }            
+            }
 
             return totalStrength /= width;
+        }
+
+
+        static public double CalculateRatio(float[] array1, float[] array2, long frequencyIndex)
+        {
+            if (array1[frequencyIndex] == 0)
+                return 0;
+
+            double ratio = (array2[frequencyIndex] / array1[frequencyIndex]);
+
+            return ratio;
         }
 
         static public double CalculateStrengthDifference(float[] array1, float[] array2, long frequencyIndex)
@@ -439,11 +450,11 @@ namespace RTLSpectrumAnalyzerGUI
 
             double dif = (array2[frequencyIndex] - array1[frequencyIndex]);
 
-            if (dif<0)
+            if (dif < 0)
                 return dif;
 
 
-            if (frequencyIndex == 0 || frequencyIndex == array1.Length-1)
+            if (frequencyIndex == 0 || frequencyIndex == array1.Length - 1)
                 return 0;
 
             /*////if (array1[frequencyIndex - 1] >= array1[frequencyIndex] || array1[frequencyIndex + 1] >= array1[frequencyIndex])
@@ -457,33 +468,33 @@ namespace RTLSpectrumAnalyzerGUI
                 return 0;*/
 
 
-             /*double array1NoiseFloor = GetSurroundNoiseFloorStrength(array1, frequencyIndex, 20);
+            /*double array1NoiseFloor = GetSurroundNoiseFloorStrength(array1, frequencyIndex, 20);
 
-             double array2NoiseFloor = GetSurroundNoiseFloorStrength(array2, frequencyIndex, 20);
+            double array2NoiseFloor = GetSurroundNoiseFloorStrength(array2, frequencyIndex, 20);
 
-             double strength1 = array1[frequencyIndex] - array1NoiseFloor;
+            double strength1 = array1[frequencyIndex] - array1NoiseFloor;
 
-             double strength2 = array2[frequencyIndex] - array2NoiseFloor;
+            double strength2 = array2[frequencyIndex] - array2NoiseFloor;
 
-             if (strength2 < 0)
-                 return strength2;
+            if (strength2 < 0)
+                return strength2;
 
-             dif = strength2 - strength1;
-             */
+            dif = strength2 - strength1;
+            */
 
-             /*double noiseFloorDif = array2NoiseFloor - array1NoiseFloor;
+            /*double noiseFloorDif = array2NoiseFloor - array1NoiseFloor;
 
-             dif -= noiseFloorDif;
-             */
+            dif -= noiseFloorDif;
+            */
 
-             ////double ratio = dif / strength2;
+            ////double ratio = dif / strength2;
 
-             double ratio = dif / array1[frequencyIndex];
-            
+            double ratio = dif / array1[frequencyIndex];
+
 
             ////return ratio * Math.Abs(strength2) + ratio * (Math.Abs(strength2) /100);
 
-            return Math.Abs(dif) + ratio * Form1.series2Max*0.01;
+            return Math.Abs(dif) + ratio * Form1.series2Max * 0.01;
         }
 
         static public double CalculateStrengthDifference2(float[] array1, float[] array2, long frequencyIndex)
@@ -529,48 +540,48 @@ namespace RTLSpectrumAnalyzerGUI
                 }
                 else
                     if (mode == WaterFallMode.Difference)
+                {
+                    if (array1.Length == array2.Length && array1.Length > 0)
                     {
-                        if (array1.Length == array2.Length && array1.Length > 0)
-                        {
-                            nearStrengthDeltaRange = -99999999;
-                            double delta;
+                        nearStrengthDeltaRange = -99999999;
+                        double delta;
 
-                            for (int i = 0; i < array1.Length; i++)
-                            {
+                        for (int i = 0; i < array1.Length; i++)
+                        {
                             ////if (!Double.IsNaN(array1[i]) && array1[i] > -10000000 && array1[i] < 10000000 && !Double.IsNaN(array2[i]) && array2[i] > -1000000 && array2[i] < 10000000)
                             if (!Double.IsNaN(array1[i]) && !Double.IsNaN(array2[i]))
                             {
                                 delta = CalculateStrengthDifference(array1, array2, i);
 
-                                    if (delta > nearStrengthDeltaRange)
-                                        nearStrengthDeltaRange = delta;
-                                }
+                                if (delta > nearStrengthDeltaRange)
+                                    nearStrengthDeltaRange = delta;
                             }
                         }
                     }
+                }
             }
         }
 
         public void RefreshWaterfall(float[] array1, float[] array2, long lowerIndex, long upperIndex)
-        {            
+        {
             if (mode == WaterFallMode.Strength)
             {
-                ScrollPictureBox();            
-                DrawLine(array1, lowerIndex, upperIndex);                
+                ScrollPictureBox();
+                DrawLine(array1, lowerIndex, upperIndex);
 
-                source.Refresh();            
+                source.Refresh();
             }
             else if (mode == WaterFallMode.Difference)
             {
                 if (array1.Length == array2.Length && array1.Length > 0)
                 {
                     ScrollPictureBox();
-                    DrawDeltaLine(array1, array2, lowerIndex, upperIndex);                    
+                    DrawDeltaLine(array1, array2, lowerIndex, upperIndex);
 
                     source.Refresh();
                 }
-            }    
-        
+            }
+
 
         }
 
@@ -592,7 +603,7 @@ namespace RTLSpectrumAnalyzerGUI
 
         public void SetStrengthMinimum(double min)
         {
-            minWaterFall = min;            
+            minWaterFall = min;
         }
 
         public void SetStrengthMaximum(double max)
@@ -608,8 +619,8 @@ namespace RTLSpectrumAnalyzerGUI
         public double GetStrengthMaximum()
         {
             return maxWaterFall;
-        }        
-        
+        }
+
         public void SetRangeMode(WaterFallRangeMode mode)
         {
             rangeMode = mode;
@@ -629,6 +640,5 @@ namespace RTLSpectrumAnalyzerGUI
         {
             nearStrengthDeltaRange = deltaRange;
         }
-        
     }
 }
