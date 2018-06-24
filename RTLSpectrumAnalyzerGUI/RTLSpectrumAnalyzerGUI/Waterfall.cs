@@ -581,8 +581,6 @@ namespace RTLSpectrumAnalyzerGUI
                     source.Refresh();
                 }
             }
-
-
         }
 
         public void SetMode(WaterFallMode mode)

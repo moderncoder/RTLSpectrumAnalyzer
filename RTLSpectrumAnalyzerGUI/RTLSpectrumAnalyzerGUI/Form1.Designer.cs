@@ -156,6 +156,8 @@
             this.listBox2 = new System.Windows.Forms.ListBox();
             this.button22 = new System.Windows.Forms.Button();
             this.button23 = new System.Windows.Forms.Button();
+            this.listBox3 = new System.Windows.Forms.ListBox();
+            this.button24 = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)(this.chart1)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.chart2)).BeginInit();
             this.groupBox1.SuspendLayout();
@@ -1001,7 +1003,7 @@
             // button17
             // 
             this.button17.Enabled = false;
-            this.button17.Location = new System.Drawing.Point(1687, 725);
+            this.button17.Location = new System.Drawing.Point(1687, 750);
             this.button17.Margin = new System.Windows.Forms.Padding(4);
             this.button17.Name = "button17";
             this.button17.Size = new System.Drawing.Size(98, 27);
@@ -1013,7 +1015,7 @@
             // button18
             // 
             this.button18.Enabled = false;
-            this.button18.Location = new System.Drawing.Point(1789, 725);
+            this.button18.Location = new System.Drawing.Point(1789, 750);
             this.button18.Margin = new System.Windows.Forms.Padding(4);
             this.button18.Name = "button18";
             this.button18.Size = new System.Drawing.Size(117, 27);
@@ -1441,7 +1443,7 @@
             // 
             // button22
             // 
-            this.button22.Location = new System.Drawing.Point(1793, 760);
+            this.button22.Location = new System.Drawing.Point(1808, 921);
             this.button22.Margin = new System.Windows.Forms.Padding(4);
             this.button22.Name = "button22";
             this.button22.Size = new System.Drawing.Size(98, 48);
@@ -1452,7 +1454,7 @@
             // 
             // button23
             // 
-            this.button23.Location = new System.Drawing.Point(1687, 760);
+            this.button23.Location = new System.Drawing.Point(1702, 921);
             this.button23.Margin = new System.Windows.Forms.Padding(4);
             this.button23.Name = "button23";
             this.button23.Size = new System.Drawing.Size(98, 48);
@@ -1461,11 +1463,34 @@
             this.button23.UseVisualStyleBackColor = true;
             this.button23.Click += new System.EventHandler(this.button23_Click);
             // 
+            // listBox3
+            // 
+            this.listBox3.FormattingEnabled = true;
+            this.listBox3.ItemHeight = 16;
+            this.listBox3.Location = new System.Drawing.Point(1658, 784);
+            this.listBox3.Name = "listBox3";
+            this.listBox3.Size = new System.Drawing.Size(281, 132);
+            this.listBox3.TabIndex = 81;
+            // 
+            // button24
+            // 
+            this.button24.Enabled = false;
+            this.button24.Location = new System.Drawing.Point(1692, 721);
+            this.button24.Margin = new System.Windows.Forms.Padding(4);
+            this.button24.Name = "button24";
+            this.button24.Size = new System.Drawing.Size(220, 24);
+            this.button24.TabIndex = 82;
+            this.button24.Text = "Resume Automated Analysis";
+            this.button24.UseVisualStyleBackColor = true;
+            this.button24.Click += new System.EventHandler(this.button24_Click);
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(1914, 968);
+            this.ClientSize = new System.Drawing.Size(1914, 1042);
+            this.Controls.Add(this.button24);
+            this.Controls.Add(this.listBox3);
             this.Controls.Add(this.button23);
             this.Controls.Add(this.button22);
             this.Controls.Add(this.label23);
@@ -1677,6 +1702,8 @@
         private System.Windows.Forms.ListBox listBox2;
         private System.Windows.Forms.Button button22;
         private System.Windows.Forms.Button button23;
+        private System.Windows.Forms.ListBox listBox3;
+        private System.Windows.Forms.Button button24;
     }
 }
 
